@@ -35,7 +35,8 @@ module.exports = grammar({
     source_file: $ => repeat($._declaration),
 
     _declaration: $ => choice(
-      $.variable_declaration
+      $.variable_declaration,
+      $.function_declaration
     ),
 
 
@@ -56,18 +57,6 @@ module.exports = grammar({
     ),
 
     // 后缀表达式 (规约 4.13)
-    postfix_expression: $ => prec(13, choice(
-      seq(
-        field('function', $._expression),
-        field('arguments', $.argument_list)
-      ),
-      seq(
-        field('object', $._expression),
-        '.',
-        field('property', $.identifier)
-      )
-    )),
-
     postfix_expression: $ => prec(13, choice(
       // 函数调用 f()
       seq(
@@ -154,6 +143,8 @@ module.exports = grammar({
 
     _type: $ => choice(
       $.primitive_type,
+      $.tuple_type,
+      $.function_type,
       $.identifier
     ),
 
@@ -163,6 +154,65 @@ module.exports = grammar({
       'UInt8', 'UInt16', 'UInt32', 'UInt64', 'UIntNative',
       'Float16', 'Float32', 'Float64'
     )),
+
+
+    // 元组类型 (规约 2.1.7)
+    tuple_type: $ => seq(
+      '(',
+      sepBy1(',', $._type),
+      ')'
+    ),
+
+    // 函数类型 (规约 2.1.9)
+    function_type: $ => seq(
+      field('parameters', $.parameter_types),
+      '->',
+      field('return_type', $._type)
+    ),
+
+    parameter_declaration: $ => seq(
+      field('name', $._pattern), // 修复：参数名可以是模式
+      ':',
+      field('type', $._type)
+    ),
+    parameter_types: $ => seq(
+      '(',
+      sepBy(',', $._type),
+      ')'
+    ),
+
+    function_declaration: $ => seq(
+      // TODO: 添加修饰符，如 'public', 'static' 等
+      'func',
+      field('name', $.identifier),
+      // TODO: 添加泛型参数 <T>
+      field('parameters', $.parameter_list),
+      optional(field('return_type', $.type_annotation)),
+      // TODO: 添加 where 约束
+      field('body', $.block)
+    ),
+
+    parameter_list: $ => seq(
+      '(',
+      sepBy(',', $.parameter_declaration),
+      ')'
+    ),
+
+    // 函数体/代码块
+    block: $ => seq(
+      '{',
+      repeat(choice(
+        $._declaration,
+        $._expression_statement
+      )),
+      '}'
+    ),
+
+    _expression_statement: $ => seq(
+      $._expression,
+      optional(';')
+    ),
+
 
     // --- 词法规则 (Tokens) ---
 
@@ -232,6 +282,3 @@ module.exports = grammar({
     )),
   }
 });
-function sepBy1(sep, rule) {
-  return seq(rule, repeat(seq(sep, rule)));
-}

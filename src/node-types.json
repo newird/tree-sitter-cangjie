@@ -34,6 +34,10 @@
     "named": true,
     "subtypes": [
       {
+        "type": "function_declaration",
+        "named": true
+      },
+      {
         "type": "variable_declaration",
         "named": true
       }
@@ -76,11 +80,19 @@
     "named": true,
     "subtypes": [
       {
+        "type": "function_type",
+        "named": true
+      },
+      {
         "type": "identifier",
         "named": true
       },
       {
         "type": "primitive_type",
+        "named": true
+      },
+      {
+        "type": "tuple_type",
         "named": true
       }
     ]
@@ -229,9 +241,100 @@
     }
   },
   {
+    "type": "block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_declaration",
+          "named": true
+        },
+        {
+          "type": "_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "escape_sequence",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "function_declaration",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "block",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "parameters": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "parameter_list",
+            "named": true
+          }
+        ]
+      },
+      "return_type": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "type_annotation",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "function_type",
+    "named": true,
+    "fields": {
+      "parameters": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "parameter_types",
+            "named": true
+          }
+        ]
+      },
+      "return_type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
   },
   {
     "type": "initializer",
@@ -243,6 +346,62 @@
       "types": [
         {
           "type": "_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "parameter_declaration",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_pattern",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "parameter_list",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "parameter_declaration",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "parameter_types",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_type",
           "named": true
         }
       ]
@@ -380,6 +539,21 @@
     }
   },
   {
+    "type": "tuple_type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "_type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "type_annotation",
     "named": true,
     "fields": {},
@@ -506,6 +680,10 @@
     "named": false
   },
   {
+    "type": "->",
+    "named": false
+  },
+  {
     "type": ".",
     "named": false
   },
@@ -595,6 +773,10 @@
     "named": false
   },
   {
+    "type": "func",
+    "named": false
+  },
+  {
     "type": "identifier",
     "named": true
   },
@@ -620,6 +802,10 @@
   },
   {
     "type": "var",
+    "named": false
+  },
+  {
+    "type": "{",
     "named": false
   },
   {
