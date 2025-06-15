@@ -1,0 +1,58 @@
+====================================
+function declaration 
+====================================
+
+func add(a: Int, b: Int): Int {
+    return a + b;
+}
+
+let my_tuple = (1, "hello");
+let (first, second) = my_tuple;
+
+let my_func: (Int, Int) -> Int = add;
+
+--- 
+
+(source_file [0, 0] - [8, 0]
+  (function_declaration [0, 0] - [2, 1]
+    name: (identifier [0, 5] - [0, 8])
+    parameters: (parameter_list [0, 8] - [0, 24]
+      (parameter_declaration [0, 9] - [0, 15]
+        name: (identifier [0, 9] - [0, 10])
+        type: (identifier [0, 12] - [0, 15]))
+      (parameter_declaration [0, 17] - [0, 23]
+        name: (identifier [0, 17] - [0, 18])
+        type: (identifier [0, 20] - [0, 23])))
+    return_type: (type_annotation [0, 24] - [0, 29]
+      (identifier [0, 26] - [0, 29]))
+    body: (block [0, 30] - [2, 1]
+      (control_transfer_statement [1, 4] - [1, 16]
+        result: (binary_expression [1, 11] - [1, 16]
+          (additive_expression [1, 11] - [1, 16]
+            lhs: (identifier [1, 11] - [1, 12])
+            rhs: (identifier [1, 15] - [1, 16]))))))
+  (variable_declaration [4, 0] - [4, 28]
+    name: (identifier [4, 4] - [4, 12])
+    value: (initializer [4, 13] - [4, 27]
+      (tuple_expression [4, 15] - [4, 27]
+        (integer_literal [4, 16] - [4, 17])
+        (line_string_literal [4, 19] - [4, 26]
+          text: (line_str_text [4, 20] - [4, 25])))))
+  (variable_declaration [5, 0] - [5, 31]
+    name: (tuple_pattern [5, 4] - [5, 19]
+      (identifier [5, 5] - [5, 10])
+      (identifier [5, 12] - [5, 18]))
+    value: (initializer [5, 20] - [5, 30]
+      (identifier [5, 22] - [5, 30])))
+  (variable_declaration [7, 0] - [7, 37]
+    name: (identifier [7, 4] - [7, 11])
+    type: (type_annotation [7, 11] - [7, 30]
+      (function_type [7, 13] - [7, 30]
+        parameters: (parameter_types [7, 13] - [7, 23]
+          (identifier [7, 14] - [7, 17])
+          (identifier [7, 19] - [7, 22]))
+        return_type: (identifier [7, 27] - [7, 30])))
+    value: (initializer [7, 31] - [7, 36]
+      (identifier [7, 33] - [7, 36]))))
+
+

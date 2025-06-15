@@ -1,3 +1,45 @@
+const DYNAMIC_PRECS = {
+  call: 1,
+};
+
+const PRECS = {
+  multiplication: 11,
+  addition: 10,
+  infix_operations: 9,
+  nil_coalescing: 8,
+  check: 7,
+  prefix_operations: 7,
+  comparison: 6,
+  postfix_operations: 6,
+  equality: 5,
+  conjunction: 4,
+  disjunction: 3,
+  block: 2,
+  loop: 1,
+  keypath: 1,
+  parameter_pack: 1,
+  control_transfer: 0,
+  as: -1,
+  tuple: -1,
+  if: -1,
+  switch: -1,
+  do: -1,
+  fully_open_range: -1,
+  range: -1,
+  navigation: -1,
+  expr: -1,
+  call: -2,
+  ternary: -2,
+  try: -2,
+  call_suffix: -2,
+  range_suffix: -2,
+  ternary_binary_suffix: -2,
+  await: -2,
+  assignment: -3,
+  comment: -3,
+  lambda: -3,
+  regex: -4,
+};
 const ESCAPE_SEQUENCE = token.immediate(seq(
   '\\',
   choice(
@@ -7,11 +49,43 @@ const ESCAPE_SEQUENCE = token.immediate(seq(
   )
 ));
 
-function sepBy(sep, rule) {
-  return optional(sepBy1(sep, rule));
+const DEC_DIGITS = sep1(/_+/, /[0-9]+/);
+const HEX_DIGITS = sep1(/_+/, /[0-9a-fA-F]+/);
+const OCT_DIGITS = sep1(/_+/, /[0-7]+/);
+const BIN_DIGITS = sep1(/_+/, /[01]+/);
+const REAL_EXPONENT = seq(/[eE]/, optional(/[+-]/), DEC_DIGITS);
+const HEX_REAL_EXPONENT = seq(/[pP]/, optional(/[+-]/), DEC_DIGITS);
+
+var LEXICAL_IDENTIFIER;
+
+if (tree_sitter_version_supports_emoji()) {
+  LEXICAL_IDENTIFIER =
+    /[_\p{XID_Start}\p{Emoji}&&[^0-9#*]](\p{EMod}|\x{FE0F}\x{20E3}?)?([_\p{XID_Continue}\p{Emoji}\x{200D}](\p{EMod}|\x{FE0F}\x{20E3}?)?)*/;
+} else {
+  LEXICAL_IDENTIFIER = /[_\p{XID_Start}][_\p{XID_Continue}]*/;
 }
 
-function sepBy1(sep, rule) {
+
+function tree_sitter_version_supports_emoji() {
+  try {
+    return (
+      TREE_SITTER_CLI_VERSION_MAJOR > 0 ||
+      TREE_SITTER_CLI_VERSION_MINOR > 20 ||
+      TREE_SITTER_CLI_VERSION_PATCH >= 5
+    );
+  } catch (err) {
+    if (err instanceof ReferenceError) {
+      return false;
+    } else {
+      throw err;
+    }
+  }
+}
+function sep(sep, rule) {
+  return optional(sep1(sep, rule));
+}
+
+function sep1(sep, rule) {
   return seq(rule, repeat(seq(sep, rule)));
 }
 
@@ -19,8 +93,52 @@ module.exports = grammar({
   name: 'cangjie',
 
   extras: $ => [
-    /\s/,       // 匹配空白字符
-    $.comment,  // 匹配注释
+    /\s/,
+    $.multiline_comment,
+    $.line_comment,
+  ],
+  externals: ($) => [
+    // Comments and raw strings are parsed in a custom scanner because they require us to carry forward state to
+    // maintain symmetry. For instance, parsing a multiline comment requires us to increment a counter whenever we see
+    // `/*`, and decrement it whenever we see `*/`. A standard grammar would only be able to exit the comment at the
+    // first `*/` (like C does). Similarly, when you start a string with `##"`, you're required to include the same
+    // number of `#` symbols to end it.
+    $.multiline_comment,
+    $.raw_str_part,
+    $.raw_str_continuing_indicator,
+    $.raw_str_end_part,
+
+    $._implicit_semi,
+    $._explicit_semi,
+    // Every one of the below operators will suppress a `_semi` if we encounter it after a newline.
+    $._arrow_operator_custom,
+    $._dot_custom,
+    $._conjunction_operator_custom,
+    $._disjunction_operator_custom,
+    $._nil_coalescing_operator_custom,
+    $._eq_custom,
+    $._eq_eq_custom,
+    $._plus_then_ws,
+    $._minus_then_ws,
+    $._bang_custom,
+    $._throws_keyword,
+    $._rethrows_keyword,
+    $.default_keyword,
+    $.where_keyword,
+    $["else"],
+    $.catch_keyword,
+    $._as_custom,
+    $._as_quest_custom,
+    $._as_bang_custom,
+    $._async_keyword_custom,
+    $._custom_operator,
+    $._hash_symbol_custom,
+    $._directive_if,
+    $._directive_elseif,
+    $._directive_else,
+    $._directive_endif,
+
+    $._fake_try_bang,
   ],
 
   supertypes: $ => [
@@ -34,6 +152,11 @@ module.exports = grammar({
   rules: {
     source_file: $ => repeat($._declaration),
 
+    line_comment: $ => token(seq(
+      '//',
+      /[^\n]*/
+    )),
+
     _declaration: $ => choice(
       $.variable_declaration,
       $.function_declaration
@@ -42,20 +165,88 @@ module.exports = grammar({
 
     _atomic_expression: $ => choice(
       $.parenthesized_expression,
+      $.tuple_expression,
+      $.unit_expression,
+      $._basic_literal,
       $.identifier,
-      $.integer_literal,
-      $.string_literal,
-      $.boolean_literal,
-      $.rune_literal
     ),
 
     _expression: $ => choice(
       $._atomic_expression,
       $.unary_expression,
       $.binary_expression,
-      $.postfix_expression
+      $.postfix_expression,
+      $.control_transfer_statement,
     ),
 
+    control_transfer_statement: ($) =>
+      choice(
+        // prec.right(PRECS.control_transfer, $._throw_statement),
+        prec.right(
+          PRECS.control_transfer,
+          seq(
+            $._optionally_valueful_control_keyword,
+            field("result", optional($._expression))
+          )
+        )
+      ),
+
+    _optionally_valueful_control_keyword: ($) =>
+      choice("return", "continue", "break", "yield"),
+
+
+    _equal_sign: ($) => alias($._eq_custom, "="),
+    _eq_eq: ($) => alias($._eq_eq_custom, "=="),
+    _dot: ($) => alias($._dot_custom, "."),
+    _arrow_operator: ($) => alias($._arrow_operator_custom, "->"),
+    _conjunction_operator: ($) => alias($._conjunction_operator_custom, "&&"),
+    _disjunction_operator: ($) => alias($._disjunction_operator_custom, "||"),
+    _nil_coalescing_operator: ($) =>
+      alias($._nil_coalescing_operator_custom, "??"),
+    _as: ($) => alias($._as_custom, "as"),
+    _as_quest: ($) => alias($._as_quest_custom, "as?"),
+    _as_bang: ($) => alias($._as_bang_custom, "as!"),
+    _hash_symbol: ($) => alias($._hash_symbol_custom, "as!"),
+    bang: ($) => choice($._bang_custom, "!"),
+    _async_keyword: ($) => alias($._async_keyword_custom, "async"),
+    throws: ($) => choice($._throws_keyword, $._rethrows_keyword),
+    // enum_class_body: ($) =>
+    //   seq("{", repeat(choice($.enum_entry, $._type_level_declaration)), "}"),
+    // enum_entry: ($) =>
+    //   seq(
+    //     // optional($.modifiers),
+    //     "case",
+    //     sep1(
+    //       seq(
+    //         field("name", $.identifier),
+    //         optional($._enum_entry_suffix)
+    //       ),
+    //       ","
+    //     ),
+    //     optional(";")
+    //   ),
+    // _enum_entry_suffix: ($) =>
+    //   choice(
+    //     field("data_contents", $.enum_type_parameters),
+    //     seq($._equal_sign, field("raw_value", $._expression))
+    //   ),
+    // enum_type_parameters: ($) =>
+    //   seq(
+    //     "(",
+    //     optional(
+    //       sep1(
+    //         seq(
+    //           optional(
+    //             seq(optional($.wildcard_pattern), $.simple_identifier, ":")
+    //           ),
+    //           $._type,
+    //           optional(seq($._equal_sign, $._expression))
+    //         ),
+    //         ","
+    //       )
+    //     ),
+    //     ")"
+    //   ),
     // 后缀表达式 (规约 4.13)
     postfix_expression: $ => prec(13, choice(
       // 函数调用 f()
@@ -67,7 +258,7 @@ module.exports = grammar({
       seq(
         field('array', $._expression),
         '[',
-        sepBy(',', $._expression),
+        sep(',', $._expression),
         ']'
       ),
       // 成员访问 obj.prop
@@ -80,18 +271,34 @@ module.exports = grammar({
 
     argument_list: $ => seq(
       '(',
-      sepBy(',', $._expression), // sepBy 是一个辅助函数
+      sep(',', $._expression),
       ')'
     ),
 
+    call_argument: $ =>
+      seq(
+        field("value", $._expression)
+      ),
 
     // 括号表达式 (规约 4.12)
-    parenthesized_expression: $ => seq(
+    unit_expression: $ => prec(0, seq('(', ')')),
+    // 只处理单个表达式，优先级更高
+    // (a + b )
+    parenthesized_expression: $ => prec(1, seq(
       '(',
       $._expression,
       ')'
-    ),
+    )),
 
+    // 只处理包含逗号的元组
+    // (a , b )
+    tuple_expression: $ => prec(0, seq(
+      '(',
+      $._expression,
+      ',',
+      sep(',', $._expression),
+      ')'
+    )),
 
 
     // 一元表达式 (规约 4.15, 4.18, 4.20)
@@ -102,32 +309,124 @@ module.exports = grammar({
 
 
     // 二元表达式
-    binary_expression: $ => {
-      const table = [
-        [prec.right, '??', 0],
-        [prec.left, '||', 1],
-        [prec.left, '&&', 2],
-        [prec.left, '|', 3],
-        [prec.left, '^', 4],
-        [prec.left, '&', 5],
-        [prec.left, choice('==', '!=', '<', '<=', '>', '>=', 'is', 'as'), 6],
-        [prec.left, choice('..', '..='), 7],
-        [prec.left, choice('<<', '>>'), 8],
-        [prec.left, choice('+', '-'), 9],
-        [prec.left, choice('*', '/', '%'), 10],
-        [prec.right, '**', 11],
-      ];
+    binary_expression: ($) =>
+      choice(
+        $.multiplicative_expression,
+        $.additive_expression,
+        $.range_expression,
+        $.infix_expression,
+        $.nil_coalescing_expression,
+        $.check_expression,
+        $.equality_expression,
+        $.comparison_expression,
+        $.conjunction_expression,
+        $.disjunction_expression,
+        $.bitwise_operation
+      ),
 
-      return choice(...table.map(([assoc, operator, precedence]) =>
-        assoc(precedence, seq(
-          field('left', $._expression),
-          field('operator', operator),
-          field('right', $._expression)
-        ))
-      ));
-    },
 
-    _pattern: $ => $.identifier,
+    multiplicative_expression: ($) =>
+      prec.left(
+        PRECS.multiplication,
+        seq(
+          field("lhs", $._expression),
+          field("op", $._multiplicative_operator),
+          field("rhs", $._expression)
+        )
+      ),
+    additive_expression: ($) =>
+      prec.left(
+        PRECS.addition,
+        seq(
+          field("lhs", $._expression),
+          field("op", $._additive_operator),
+          field("rhs", $._expression)
+        )
+      ),
+    range_expression: ($) =>
+      prec.right(
+        PRECS.range,
+        seq(
+          field("start", $._expression),
+          field("op", $._range_operator),
+          field("end", $._expr_hack_at_ternary_binary_suffix)
+        )
+      ),
+    infix_expression: ($) =>
+      prec.left(
+        PRECS.infix_operations,
+        seq(
+          field("lhs", $._expression),
+          field("op", $.custom_operator),
+          field("rhs", $._expr_hack_at_ternary_binary_suffix)
+        )
+      ),
+    nil_coalescing_expression: ($) =>
+      prec.right(
+        PRECS.nil_coalescing,
+        seq(
+          field("value", $._expression),
+          $._nil_coalescing_operator,
+          field("if_nil", $._expr_hack_at_ternary_binary_suffix)
+        )
+      ),
+    check_expression: ($) =>
+      prec.left(
+        PRECS.check,
+        seq(
+          field("target", $._expression),
+          field("op", $._is_operator),
+          field("type", $._type)
+        )
+      ),
+    comparison_expression: ($) =>
+      prec.left(
+        seq(
+          field("lhs", $._expression),
+          field("op", $._comparison_operator),
+          field("rhs", $._expr_hack_at_ternary_binary_suffix)
+        )
+      ),
+    equality_expression: ($) =>
+      prec.left(
+        PRECS.equality,
+        seq(
+          field("lhs", $._expression),
+          field("op", $._equality_operator),
+          field("rhs", $._expr_hack_at_ternary_binary_suffix)
+        )
+      ),
+    conjunction_expression: ($) =>
+      prec.left(
+        PRECS.conjunction,
+        seq(
+          field("lhs", $._expression),
+          field("op", $._conjunction_operator),
+          field("rhs", $._expr_hack_at_ternary_binary_suffix)
+        )
+      ),
+    disjunction_expression: ($) =>
+      prec.left(
+        PRECS.disjunction,
+        seq(
+          field("lhs", $._expression),
+          field("op", $._disjunction_operator),
+          field("rhs", $._expr_hack_at_ternary_binary_suffix)
+        )
+      ),
+    bitwise_operation: ($) =>
+      prec.left(
+        seq(
+          field("lhs", $._expression),
+          field("op", $._bitwise_binary_operator),
+          field("rhs", $._expr_hack_at_ternary_binary_suffix)
+        )
+      ),
+    custom_operator: ($) => choice(token(/[\/]+[*]+/), $._custom_operator),
+    _pattern: $ => choice(
+      $.identifier,
+      $.tuple_pattern,
+    ),
 
     variable_declaration: $ => seq(
       choice('let', 'var', 'const'),
@@ -143,23 +442,22 @@ module.exports = grammar({
 
     _type: $ => choice(
       $.primitive_type,
-      $.tuple_type,
       $.function_type,
       $.identifier
     ),
 
-    primitive_type: $ => token(choice(
+    primitive_type: $ => choice(
       'Bool', 'Rune', 'String', 'Unit', 'Nothing', 'This',
       'Int8', 'Int16', 'Int32', 'Int64', 'IntNative',
       'UInt8', 'UInt16', 'UInt32', 'UInt64', 'UIntNative',
       'Float16', 'Float32', 'Float64'
-    )),
+    ),
 
 
     // 元组类型 (规约 2.1.7)
-    tuple_type: $ => seq(
+    tuple_pattern: $ => seq(
       '(',
-      sepBy1(',', $._type),
+      sep1(',', $._pattern),
       ')'
     ),
 
@@ -171,13 +469,13 @@ module.exports = grammar({
     ),
 
     parameter_declaration: $ => seq(
-      field('name', $._pattern), // 修复：参数名可以是模式
+      field('name', $._pattern),
       ':',
       field('type', $._type)
     ),
     parameter_types: $ => seq(
       '(',
-      sepBy(',', $._type),
+      sep(',', $._type),
       ')'
     ),
 
@@ -194,9 +492,18 @@ module.exports = grammar({
 
     parameter_list: $ => seq(
       '(',
-      sepBy(',', $.parameter_declaration),
+      sep(',', $.parameter_declaration),
       ')'
     ),
+    call_suffix: ($) =>
+      prec(
+        PRECS.call_suffix,
+        choice(
+          $.argument_list,
+          // prec.dynamic(-1, $._fn_call_lambda_arguments),
+          // seq($.value_arguments, $._fn_call_lambda_arguments)
+        )
+      ),
 
     // 函数体/代码块
     block: $ => seq(
@@ -218,61 +525,55 @@ module.exports = grammar({
 
     comment: $ => token(choice(
       seq('//', /[^\n\r]*/),
-      seq('/*', repeat(choice(/[^*]+/, /\*[^/]/)), '*/')
+      seq('/*', /([^*]|\*+[^*/])*/, '*/')
+      // seq('/*', /[^*]*\*+([^/*][^*]*\*+)*/, '/')
     )),
 
-    identifier: $ => token(choice(
-      seq(/\p{XID_Start}/, /\p{XID_Continue}*/),
-      seq('_', /\p{XID_Continue}+/),
-      seq('`', choice(/\p{XID_Start}/, '_'), /\p{XID_Continue}*/, '`')
-    )),
 
-    integer_literal: $ => token(seq(
+    identifier: ($) =>
       choice(
-        /0[bB][01_]+/,
-        /0[oO][0-7_]+/,
-        /\d[\d_]*/,
-        /0[xX][\da-fA-F_]+/
+        LEXICAL_IDENTIFIER,
+        /`[^\r\n` ]*`/,       // leave checking work for compiler  
+        /\$[0-9]+/,
       ),
-      optional(/i8|i16|i32|i64|u8|u16|u32|u64/)
-    )),
 
-    boolean_literal: $ => token(choice('true', 'false')),
-
-    escape_sequence: $ => token.immediate(seq(
-      '\\',
+    _basic_literal: ($) =>
       choice(
-        /[^xu]/,
-        /u[0-9a-fA-F]{4}/,
-        /u\{[0-9a-fA-F]+\}/
-      )
-    )),
-
-    string_literal: $ => choice(
-      seq(
-        '"',
-        repeat(choice(
-          $._string_content_double,
-          ESCAPE_SEQUENCE, // <--- 使用常量
-          $.string_interpolation
-        )),
-        '"'
+        $.integer_literal,
+        $.hex_literal,
+        $.oct_literal,
+        $.bin_literal,
+        $.real_literal,
+        $.boolean_literal,
+        $._string_literal,
+        $.rune_literal,
+        $.regex_literal,
       ),
-      seq(
-        '"""',
-        repeat(choice(
-          token.immediate(prec(1, /[^"$\\]+/)),
-          $.escape_sequence,
-          $.string_interpolation
-        )),
-        '"""'
+    real_literal: ($) =>
+      token(
+        choice(
+          seq(DEC_DIGITS, REAL_EXPONENT),
+          seq(optional(DEC_DIGITS), ".", DEC_DIGITS, optional(REAL_EXPONENT)),
+          seq(
+            "0x",
+            HEX_DIGITS,
+            optional(seq(".", HEX_DIGITS)),
+            HEX_REAL_EXPONENT
+          )
+        )
       ),
-      /r#".*?"#r/
-    ),
-
-    string_interpolation: $ => seq('${', $._expression, '}'),
-    _string_content_double: $ => token.immediate(prec(1, /[^"$\\]+/)),
-
+    integer_literal: ($) => token(seq(optional(/[1-9]/), DEC_DIGITS)),
+    hex_literal: ($) => token(seq("0", /[xX]/, HEX_DIGITS)),
+    oct_literal: ($) => token(seq("0", /[oO]/, OCT_DIGITS)),
+    bin_literal: ($) => token(seq("0", /[bB]/, BIN_DIGITS)),
+    boolean_literal: ($) => choice("true", "false"),
+    // String literals
+    _string_literal: ($) =>
+      choice(
+        $.line_string_literal,
+        $.multi_line_string_literal,
+        $.raw_string_literal
+      ),
     rune_literal: $ => token(seq(
       'r',
       choice(
@@ -280,5 +581,125 @@ module.exports = grammar({
         seq('"', choice(/[^"\\]/, ESCAPE_SEQUENCE), '"')
       )
     )),
+    line_string_literal: ($) =>
+      seq(
+        '"',
+        repeat(choice(field("text", $._line_string_content), $._interpolation)),
+        '"'
+      ),
+    _line_string_content: ($) => choice($.line_str_text, $.str_escaped_char),
+    line_str_text: ($) => /[^\\"]+/,
+    str_escaped_char: ($) =>
+      choice($._escaped_identifier, $._uni_character_literal),
+    _uni_character_literal: ($) => seq("\\", "u", /\{[0-9a-fA-F]+\}/),
+    multi_line_string_literal: ($) =>
+      seq(
+        '"""',
+        repeat(
+          choice(field("text", $._multi_line_string_content), $._interpolation)
+        ),
+        '"""'
+      ),
+    raw_string_literal: ($) =>
+      seq(
+        repeat(
+          seq(
+            field("text", $.raw_str_part),
+            field("interpolation", $.raw_str_interpolation),
+            optional($.raw_str_continuing_indicator)
+          )
+        ),
+        field("text", $.raw_str_end_part)
+      ),
+    raw_str_interpolation: ($) =>
+      seq($.raw_str_interpolation_start, $._interpolation_contents, ")"),
+    raw_str_interpolation_start: ($) => /\\#*\(/,
+    _multi_line_string_content: ($) =>
+      choice($.multi_line_str_text, $.str_escaped_char, '"'),
+    _interpolation: ($) => seq("\\(", $._interpolation_contents, ")"),
+    _interpolation_contents: ($) =>
+      sep1(
+        field(
+          "interpolation",
+          alias($.call_argument, $.interpolated_expression)
+        ),
+        ","
+      ),
+    _escaped_identifier: ($) => /\\[0\\tnr"'\n]/,
+    multi_line_str_text: ($) => /[^\\"]+/,
+    regex_literal: ($) =>
+      choice(
+        $._extended_regex_literal,
+        $._multiline_regex_literal,
+        $._oneline_regex_literal
+      ),
+
+    _extended_regex_literal: ($) =>
+      seq($._hash_symbol, /\/((\/[^#])|[^\n])+\/#/),
+
+    _multiline_regex_literal: ($) =>
+      seq($._hash_symbol, /\/\n/, /(\/[^#]|[^/])*?\n\/#/),
+
+    _oneline_regex_literal: ($) =>
+      token(
+        prec(
+          PRECS.regex,
+          seq(
+            "/",
+            token.immediate(/[^ \t\n]?[^/\n]*[^ \t\n/]/),
+            token.immediate("/")
+          )
+        )
+      ),
+
+    _multiplicative_operator: ($) =>
+      choice("*", alias(token(prec(PRECS.regex, "/")), "/"), "%"),
+
+    _assignment_and_operator: ($) =>
+      choice("+=", "-=", "*=", "/=", "%=", $._equal_sign),
+    _equality_operator: ($) => choice("!=", "!==", $._eq_eq, "==="),
+    _comparison_operator: ($) => choice("<", ">", "<=", ">="),
+    _three_dot_operator: ($) => alias("...", "..."), // Weird alias to satisfy highlight queries
+    _open_ended_range_operator: ($) => alias("..<", "..<"),
+    _is_operator: ($) => "is",
+    _range_operator: ($) =>
+      choice($._open_ended_range_operator, $._three_dot_operator),
+    open_end_range_expression: ($) =>
+      prec.right(
+        PRECS.range,
+        seq(field("start", $._expression), $._three_dot_operator)
+      ),
+    _additive_operator: ($) =>
+      choice(
+        alias($._plus_then_ws, "+"),
+        alias($._minus_then_ws, "-"),
+        "+",
+        "-"
+      ),
+
+    _expr_hack_at_ternary_binary_suffix: ($) =>
+      prec.left(
+        PRECS.ternary_binary_suffix,
+        choice(
+          $._expression,
+          alias($.expr_hack_at_ternary_binary_call, $.call_expression)
+        )
+      ),
+    expr_hack_at_ternary_binary_call: ($) =>
+      seq(
+        $._expression,
+        alias($.expr_hack_at_ternary_binary_call_suffix, $.call_suffix)
+      ),
+    expr_hack_at_ternary_binary_call_suffix: ($) =>
+      prec(PRECS.call_suffix, $.argument_list),
+    call_expression: ($) =>
+      prec(
+        PRECS.call,
+        prec.dynamic(DYNAMIC_PRECS.call, seq($._expression, $.call_suffix))
+      ),
+
+    _bitwise_binary_operator: ($) => choice("&", "|", "^", "<<", ">>"),
+    _postfix_unary_operator: ($) => choice("++", "--", $.bang),
+    directly_assignable_expression: ($) => $._expression,
   }
 });

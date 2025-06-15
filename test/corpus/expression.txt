@@ -1,0 +1,44 @@
+====================================
+Expression 
+====================================
+
+let a = 1 + 2 * 3;
+let b = -a && true;
+let c = my_function(a, b);
+let d = my_array[c.prop];
+
+--- 
+
+(source_file [0, 0] - [4, 0]
+  (variable_declaration [0, 0] - [0, 18]
+    name: (identifier [0, 4] - [0, 5])
+    value: (initializer [0, 6] - [0, 17]
+      (binary_expression [0, 8] - [0, 17]
+        left: (integer_literal [0, 8] - [0, 9])
+        right: (binary_expression [0, 12] - [0, 17]
+          left: (integer_literal [0, 12] - [0, 13])
+          right: (integer_literal [0, 16] - [0, 17])))))
+  (variable_declaration [1, 0] - [1, 19]
+    name: (identifier [1, 4] - [1, 5])
+    value: (initializer [1, 6] - [1, 18]
+      (binary_expression [1, 8] - [1, 18]
+        left: (unary_expression [1, 8] - [1, 10]
+          (identifier [1, 9] - [1, 10]))
+        right: (identifier [1, 14] - [1, 18]))))
+  (variable_declaration [2, 0] - [2, 26]
+    name: (identifier [2, 4] - [2, 5])
+    value: (initializer [2, 6] - [2, 25]
+      (postfix_expression [2, 8] - [2, 25]
+        function: (identifier [2, 8] - [2, 19])
+        arguments: (argument_list [2, 19] - [2, 25]
+          (identifier [2, 20] - [2, 21])
+          (identifier [2, 23] - [2, 24])))))
+  (variable_declaration [3, 0] - [3, 25]
+    name: (identifier [3, 4] - [3, 5])
+    value: (initializer [3, 6] - [3, 24]
+      (postfix_expression [3, 8] - [3, 24]
+        array: (identifier [3, 8] - [3, 16])
+        (postfix_expression [3, 17] - [3, 23]
+          object: (identifier [3, 17] - [3, 18])
+          property: (identifier [3, 19] - [3, 23]))))))
+

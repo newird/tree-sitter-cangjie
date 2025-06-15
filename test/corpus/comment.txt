@@ -1,0 +1,14 @@
+====================================
+line comment & block comment 
+====================================
+// this is a comment 
+
+/* this is a 
+ * /* block */ 
+ comment */
+
+--- 
+(source_file [0, 0] - [5, 0]
+  (line_comment [0, 0] - [0, 21])
+  (multiline_comment [2, 0] - [4, 11]))
+
