@@ -3,7 +3,7 @@ const DYNAMIC_PRECS = {
 };
 
 const PRECS = {
-  type: 1,
+  type: 7,
   multiplication: 11,
   addition: 10,
   infix_operations: 9,
@@ -152,8 +152,8 @@ module.exports = grammar({
   ],
 
   // conflicts: $ => [
-  //   [$._atomic_expression, $._type],
-  //   [$._atomic_expression, $.generic_type], // 明确声明冲突
+  //   [$.generic_type, $.comparison_expression],
+  //   [$.varray_size_specifier, $.identifier],
   // ],
 
   rules: {
@@ -240,34 +240,6 @@ module.exports = grammar({
       '}'
     ),
 
-    generic_type: $ => prec.left(PRECS.comparison + 1, seq(
-      field('name', choice($.identifier, $.scoped_type_identifier)),
-      field('arguments', $.type_argument_clause)
-    )),
-
-    type_argument_clause: $ => seq(
-      '<',
-      sep1(',', $._type),
-      '>'
-    ),
-
-    tuple_type: $ => prec(PRECS.tuple, seq(
-      '(',
-      sep1(',', $._type),
-      ')'
-    )),
-
-    type_inheritance_clause: $ => seq(
-      '<:',
-      sep1('&', $._type)
-    ),
-
-
-    generic_parameter_clause: $ => prec(1, seq(
-      '<',
-      sep1(',', $.identifier),
-      '>'
-    )),
     _enum_case_list: $ => seq(
       $.enum_case,
       repeat(seq('|', $.enum_case))
@@ -289,7 +261,55 @@ module.exports = grammar({
 
     enum_case_parameters: $ => alias($.parameter_types, $.enum_case_parameter_list),
 
+    type_argument_clause: $ => prec(1, seq(
+      '<',
+      sep1(
+        ',',
+        choice(
+          // array<T,U>
+          $._type,
+          // varray<T,$N>
+          $.varray_size_specifier
+        ),
+      ),
+      '>'
+    )),
 
+    tuple_type: $ => prec(PRECS.tuple, seq(
+      '(',
+      sep1(',', $._type),
+      ')'
+    )),
+
+    type_inheritance_clause: $ => seq(
+      '<:',
+      sep1('&', $._type)
+    ),
+
+
+    // generic part 
+    _generic_argument: $ => choice(
+      $._type,
+      $.varray_size_specifier
+    ),
+
+    generic_type: $ => prec.left(PRECS.type + 1, seq(
+      field('name', $.identifier),
+      field('arguments', $.type_argument_clause)
+    )),
+
+    generic_parameter_clause: $ => prec(1, seq(
+      '<',
+      sep1(',', $._generic_argument),
+      '>'
+    )),
+
+    generic_expression: $ => prec(PRECS.comparison + 1, seq(
+      field('name', choice($.identifier, $.scoped_type_identifier)),
+      field('type_arguments', $.type_argument_clause)
+    )),
+
+    // array part 
     array_literal: $ => seq(
       '[',
       optional($._array_elements),
@@ -298,8 +318,10 @@ module.exports = grammar({
 
     _array_elements: $ => sep1(
       ',',
-      field('element', $._expression)
+      field('element', $._expression),
     ),
+
+    varray_size_specifier: $ => token(/\$[0-9]+/),
 
     // 后缀表达式 (规约 4.13)
     postfix_expression: $ => prec(PRECS.postfix_operations, choice(
@@ -353,10 +375,6 @@ module.exports = grammar({
       ')'
     )),
 
-    generic_expression: $ => prec(PRECS.call, seq(
-      field('name', choice($.identifier, $.scoped_type_identifier)),
-      field('type_arguments', $.type_argument_clause)
-    )),
 
 
     // 一元表达式 (规约 4.15, 4.18, 4.20)
@@ -600,7 +618,7 @@ module.exports = grammar({
       choice(
         LEXICAL_IDENTIFIER,
         /`[^\r\n` ]*`/,       // leave checking work for compiler  
-        /\$[0-9]+/,
+        // /\$[0-9]+/,        // conflict with $N, shall we name variable start with `$` ?
       ),
 
     _basic_literal: ($) =>

@@ -13,3 +13,14 @@ let intArray: Array<Int32> = [0, 1, 2, 3, 4]
 func process(data: Array<String>) {
   return 0;
 }
+
+let arr1: VArray<Int64, $5> = [1, 2, 3, 4, 5]
+let arr2: VArray<Int16, $0> = []
+
+// 在函数签名中使用
+func mergeVArray(a: VArray<Int64, $2>, b: VArray<Int64, $3>): VArray<Int64, $5> {
+  return 0;
+}
+
+// 多维 VArray
+var arr8: VArray<VArray<Int64, $2>, $2> = [[1, 2], [3, 4]]
