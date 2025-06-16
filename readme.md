@@ -31,6 +31,9 @@ nix develop
 ## related work
 
 [tree-sitter](https://github.com/tree-sitter/tree-sitter)
+
 [tree-sitter-swift](https://github.com/alex-pinkus/tree-sitter-swift)
+
 [tree-sitter-rust](https://github.com/tree-sitter/tree-sitter-rust)
+
 [tree-sitter-ocaml](https://github.com/tree-sitter/tree-sitter-ocaml)

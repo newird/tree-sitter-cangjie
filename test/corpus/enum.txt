@@ -1,0 +1,87 @@
+====================================
+enum declaration 
+====================================
+
+enum TimeUnit1 {
+  Year | Month | Day | Hour
+}
+enum TimeUnit3 {
+  | Year | Month | Day | Hour 
+}
+enum TimeUnit2 {
+| Year(Float32)
+| Month(Float32, Float32)
+| Day(Float32, Float32, Float32)
+| Hour(Float32, Float32, Float32, Float32)
+}
+
+public enum Option<T> {
+    Some(T) | None
+}
+---- 
+
+(source_file [0, 0] - [16, 0]
+  (enum_declaration [0, 0] - [2, 1]
+    name: (identifier [0, 5] - [0, 14])
+    body: (enum_body [0, 15] - [2, 1]
+      (enum_case [1, 2] - [1, 6]
+        name: (identifier [1, 2] - [1, 6]))
+      (enum_case [1, 9] - [1, 14]
+        name: (identifier [1, 9] - [1, 14]))
+      (enum_case [1, 17] - [1, 20]
+        name: (identifier [1, 17] - [1, 20]))
+      (enum_case [1, 23] - [1, 27]
+        name: (identifier [1, 23] - [1, 27]))))
+  (enum_declaration [3, 0] - [5, 1]
+    name: (identifier [3, 5] - [3, 14])
+    body: (enum_body [3, 15] - [5, 1]
+      (enum_case [4, 4] - [4, 8]
+        name: (identifier [4, 4] - [4, 8]))
+      (enum_case [4, 11] - [4, 16]
+        name: (identifier [4, 11] - [4, 16]))
+      (enum_case [4, 19] - [4, 22]
+        name: (identifier [4, 19] - [4, 22]))
+      (enum_case [4, 25] - [4, 29]
+        name: (identifier [4, 25] - [4, 29]))))
+  (enum_declaration [6, 0] - [11, 1]
+    name: (identifier [6, 5] - [6, 14])
+    body: (enum_body [6, 15] - [11, 1]
+      (enum_case [7, 2] - [7, 15]
+        name: (identifier [7, 2] - [7, 6])
+        parameters: (enum_case_parameters [7, 6] - [7, 15]
+          (enum_case_parameter_list [7, 6] - [7, 15]
+            (primitive_type [7, 7] - [7, 14]))))
+      (enum_case [8, 2] - [8, 25]
+        name: (identifier [8, 2] - [8, 7])
+        parameters: (enum_case_parameters [8, 7] - [8, 25]
+          (enum_case_parameter_list [8, 7] - [8, 25]
+            (primitive_type [8, 8] - [8, 15])
+            (primitive_type [8, 17] - [8, 24]))))
+      (enum_case [9, 2] - [9, 32]
+        name: (identifier [9, 2] - [9, 5])
+        parameters: (enum_case_parameters [9, 5] - [9, 32]
+          (enum_case_parameter_list [9, 5] - [9, 32]
+            (primitive_type [9, 6] - [9, 13])
+            (primitive_type [9, 15] - [9, 22])
+            (primitive_type [9, 24] - [9, 31]))))
+      (enum_case [10, 2] - [10, 42]
+        name: (identifier [10, 2] - [10, 6])
+        parameters: (enum_case_parameters [10, 6] - [10, 42]
+          (enum_case_parameter_list [10, 6] - [10, 42]
+            (primitive_type [10, 7] - [10, 14])
+            (primitive_type [10, 16] - [10, 23])
+            (primitive_type [10, 25] - [10, 32])
+            (primitive_type [10, 34] - [10, 41]))))))
+  (enum_declaration [13, 0] - [15, 1]
+    name: (identifier [13, 12] - [13, 18])
+    generic_parameters: (generic_parameter_clause [13, 18] - [13, 21]
+      (identifier [13, 19] - [13, 20]))
+    body: (enum_body [13, 22] - [15, 1]
+      (enum_case [14, 4] - [14, 11]
+        name: (identifier [14, 4] - [14, 8])
+        parameters: (enum_case_parameters [14, 8] - [14, 11]
+          (enum_case_parameter_list [14, 8] - [14, 11]
+            (identifier [14, 9] - [14, 10]))))
+      (enum_case [14, 14] - [14, 18]
+        name: (identifier [14, 14] - [14, 18])))))
+

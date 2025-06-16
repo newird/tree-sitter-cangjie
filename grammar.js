@@ -3,6 +3,7 @@ const DYNAMIC_PRECS = {
 };
 
 const PRECS = {
+  type: 1,
   multiplication: 11,
   addition: 10,
   infix_operations: 9,
@@ -141,6 +142,7 @@ module.exports = grammar({
     $._fake_try_bang,
   ],
 
+
   supertypes: $ => [
     $._expression,
     $._declaration,
@@ -148,6 +150,11 @@ module.exports = grammar({
     $._type,
     $._atomic_expression,
   ],
+
+  // conflicts: $ => [
+  //   [$._atomic_expression, $._type],
+  //   [$._atomic_expression, $.generic_type], // 明确声明冲突
+  // ],
 
   rules: {
     source_file: $ => repeat($._declaration),
@@ -159,7 +166,8 @@ module.exports = grammar({
 
     _declaration: $ => choice(
       $.variable_declaration,
-      $.function_declaration
+      $.function_declaration,
+      $.enum_declaration,
     ),
 
 
@@ -168,16 +176,28 @@ module.exports = grammar({
       $.tuple_expression,
       $.unit_expression,
       $._basic_literal,
+      $.array_literal,
       $.identifier,
     ),
 
     _expression: $ => choice(
       $._atomic_expression,
+      $.generic_expression,
       $.unary_expression,
       $.binary_expression,
       $.postfix_expression,
       $.control_transfer_statement,
     ),
+
+
+    _type_identifier: $ => alias($.scoped_type_identifier, $.type_identifier),
+
+    scoped_type_identifier: $ => prec.left(1, seq(
+      field('path', choice($.identifier, $.scoped_type_identifier)),
+      '.',
+      field('name', $.identifier)
+    )),
+
 
     control_transfer_statement: ($) =>
       choice(
@@ -210,58 +230,91 @@ module.exports = grammar({
     bang: ($) => choice($._bang_custom, "!"),
     _async_keyword: ($) => alias($._async_keyword_custom, "async"),
     throws: ($) => choice($._throws_keyword, $._rethrows_keyword),
-    // enum_class_body: ($) =>
-    //   seq("{", repeat(choice($.enum_entry, $._type_level_declaration)), "}"),
-    // enum_entry: ($) =>
-    //   seq(
-    //     // optional($.modifiers),
-    //     "case",
-    //     sep1(
-    //       seq(
-    //         field("name", $.identifier),
-    //         optional($._enum_entry_suffix)
-    //       ),
-    //       ","
-    //     ),
-    //     optional(";")
-    //   ),
-    // _enum_entry_suffix: ($) =>
-    //   choice(
-    //     field("data_contents", $.enum_type_parameters),
-    //     seq($._equal_sign, field("raw_value", $._expression))
-    //   ),
-    // enum_type_parameters: ($) =>
-    //   seq(
-    //     "(",
-    //     optional(
-    //       sep1(
-    //         seq(
-    //           optional(
-    //             seq(optional($.wildcard_pattern), $.simple_identifier, ":")
-    //           ),
-    //           $._type,
-    //           optional(seq($._equal_sign, $._expression))
-    //         ),
-    //         ","
-    //       )
-    //     ),
-    //     ")"
-    //   ),
+
+    // --- Enum (from 2.1.10) ---
+    enum_body: $ => seq(
+      '{',
+      optional('|'),
+      optional($._enum_case_list),
+      repeat($._declaration),
+      '}'
+    ),
+
+    generic_type: $ => prec.left(PRECS.comparison + 1, seq(
+      field('name', choice($.identifier, $.scoped_type_identifier)),
+      field('arguments', $.type_argument_clause)
+    )),
+
+    type_argument_clause: $ => seq(
+      '<',
+      sep1(',', $._type),
+      '>'
+    ),
+
+    tuple_type: $ => prec(PRECS.tuple, seq(
+      '(',
+      sep1(',', $._type),
+      ')'
+    )),
+
+    type_inheritance_clause: $ => seq(
+      '<:',
+      sep1('&', $._type)
+    ),
+
+
+    generic_parameter_clause: $ => prec(1, seq(
+      '<',
+      sep1(',', $.identifier),
+      '>'
+    )),
+    _enum_case_list: $ => seq(
+      $.enum_case,
+      repeat(seq('|', $.enum_case))
+    ),
+
+    enum_declaration: $ => seq(
+      optional('public'),
+      'enum',
+      field('name', $.identifier),
+      optional(field('generic_parameters', $.generic_parameter_clause)),
+      optional(field('inheritance', $.type_inheritance_clause)),
+      field('body', $.enum_body)
+    ),
+
+    enum_case: $ => seq(
+      field('name', $.identifier),
+      optional(field('parameters', $.enum_case_parameters))
+    ),
+
+    enum_case_parameters: $ => alias($.parameter_types, $.enum_case_parameter_list),
+
+
+    array_literal: $ => seq(
+      '[',
+      optional($._array_elements),
+      ']'
+    ),
+
+    _array_elements: $ => sep1(
+      ',',
+      field('element', $._expression)
+    ),
+
     // 后缀表达式 (规约 4.13)
-    postfix_expression: $ => prec(13, choice(
-      // 函数调用 f()
+    postfix_expression: $ => prec(PRECS.postfix_operations, choice(
       seq(
         field('function', $._expression),
         field('arguments', $.argument_list)
       ),
-      // 索引访问 a[i]
+      // 索引访问
       seq(
         field('array', $._expression),
         '[',
         sep(',', $._expression),
         ']'
       ),
-      // 成员访问 obj.prop
+      // 成员访问
       seq(
         field('object', $._expression),
         '.',
@@ -300,6 +353,11 @@ module.exports = grammar({
       ')'
     )),
 
+    generic_expression: $ => prec(PRECS.call, seq(
+      field('name', choice($.identifier, $.scoped_type_identifier)),
+      field('type_arguments', $.type_argument_clause)
+    )),
+
 
     // 一元表达式 (规约 4.15, 4.18, 4.20)
     unary_expression: $ => prec.right(12, seq(
@@ -323,6 +381,7 @@ module.exports = grammar({
         $.disjunction_expression,
         $.bitwise_operation
       ),
+
 
 
     multiplicative_expression: ($) =>
@@ -381,9 +440,10 @@ module.exports = grammar({
       ),
     comparison_expression: ($) =>
       prec.left(
+        PRECS.comparison,
         seq(
           field("lhs", $._expression),
-          field("op", $._comparison_operator),
+          field("op", choice('<', '>', '<=', '>=',)),
           field("rhs", $._expr_hack_at_ternary_binary_suffix)
         )
       ),
@@ -416,6 +476,7 @@ module.exports = grammar({
       ),
     bitwise_operation: ($) =>
       prec.left(
+        PRECS.infix_operations - 1,
         seq(
           field("lhs", $._expression),
           field("op", $._bitwise_binary_operator),
@@ -438,12 +499,17 @@ module.exports = grammar({
 
     initializer: $ => seq('=', $._expression),
 
+
     type_annotation: $ => seq(':', $._type),
+
 
     _type: $ => choice(
       $.primitive_type,
       $.function_type,
-      $.identifier
+      $.generic_type,
+      $.tuple_type,
+      $.scoped_type_identifier,
+      $.identifier,
     ),
 
     primitive_type: $ => choice(
