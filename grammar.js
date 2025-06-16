@@ -16,10 +16,11 @@ const PRECS = {
   conjunction: 4,
   disjunction: 3,
   block: 2,
+  assignment: -3,
   loop: 1,
   keypath: 1,
   parameter_pack: 1,
-  control_transfer: 0,
+  control_transfer: -4,
   as: -1,
   tuple: -1,
   if: -1,
@@ -127,6 +128,7 @@ module.exports = grammar({
     $.default_keyword,
     $.where_keyword,
     $["else"],
+    $.else_keyword,
     $.catch_keyword,
     $._as_custom,
     $._as_quest_custom,
@@ -151,13 +153,19 @@ module.exports = grammar({
     $._atomic_expression,
   ],
 
-  // conflicts: $ => [
-  //   [$.generic_type, $.comparison_expression],
-  //   [$.varray_size_specifier, $.identifier],
-  // ],
+  conflicts: $ => [
+    [$._atomic_expression, $._type],
+    [$.postfix_expression, $.expr_hack_at_ternary_binary_call_suffix],
+  ],
 
   rules: {
-    source_file: $ => repeat($._declaration),
+    source_file: $ => repeat($._statement),
+
+
+    _statement: $ => choice(
+      $._declaration,
+      $._expression_statement,
+    ),
 
     line_comment: $ => token(seq(
       '//',
@@ -182,13 +190,22 @@ module.exports = grammar({
 
     _expression: $ => choice(
       $._atomic_expression,
-      $.generic_expression,
+      // $.generic_expression,
       $.unary_expression,
       $.binary_expression,
       $.postfix_expression,
+      $.assignment_expression,
       $.control_transfer_statement,
+      $.if_expression,
+      $.while_expression,
     ),
 
+
+    assignment_expression: $ => prec.right(PRECS.assignment, seq(
+      field('left', choice($.identifier, $.postfix_expression)), // 左值只能是变量或成员访问
+      '=',
+      field('right', $._expression)
+    )),
 
     _type_identifier: $ => alias($.scoped_type_identifier, $.type_identifier),
 
@@ -213,6 +230,46 @@ module.exports = grammar({
 
     _optionally_valueful_control_keyword: ($) =>
       choice("return", "continue", "break", "yield"),
+
+    // --- 控制流表达式 (Control Flow) ---
+
+    // if 表达式 (规约 4.3)
+    // TODO: if-let 
+    if_expression: ($) =>
+      prec.right(
+        PRECS["if"],
+        seq(
+          "if",
+          field("condition", $.parenthesized_expression),
+          field("body", $.block),
+          optional(seq($["else"], $._else_options))
+        )
+      ),
+
+    _else_options: ($) => choice(
+      field("body", $.block),
+      $.if_expression),
+
+    guard_statement: ($) =>
+      prec.right(
+        PRECS["if"],
+        seq(
+          "guard",
+          field("condition", $.parenthesized_expression),
+          $["else"],
+          $.block
+        )
+      ),
+
+    // while 表达式 (规约 4.5.2)
+    while_expression: $ => prec(PRECS.loop, seq(
+      'while',
+      field('condition', $.parenthesized_expression),
+      field('body', $.block)
+    )),
+
+    _if_condition_sequence_item: ($) =>
+      $._expression,
 
 
     _equal_sign: ($) => alias($._eq_custom, "="),
@@ -298,16 +355,16 @@ module.exports = grammar({
       field('arguments', $.type_argument_clause)
     )),
 
-    generic_parameter_clause: $ => prec(1, seq(
+    generic_parameter_clause: $ => prec(2, seq(
       '<',
       sep1(',', $._generic_argument),
       '>'
     )),
-
-    generic_expression: $ => prec(PRECS.comparison + 1, seq(
-      field('name', choice($.identifier, $.scoped_type_identifier)),
-      field('type_arguments', $.type_argument_clause)
-    )),
+    //
+    // generic_expression: $ => prec(PRECS.comparison + 1, seq(
+    //   field('name', choice($.identifier, $.scoped_type_identifier)),
+    //   field('type_arguments', $.type_argument_clause)
+    // )),
 
     // array part 
     array_literal: $ => seq(
@@ -324,25 +381,33 @@ module.exports = grammar({
     varray_size_specifier: $ => token(/\$[0-9]+/),
 
     // 后缀表达式 (规约 4.13)
-    postfix_expression: $ => prec(PRECS.postfix_operations, choice(
-      seq(
+    postfix_expression: $ => choice(
+      // 带泛型的函数调用
+      // 匹配 myFunc<T>()
+      prec.left(PRECS.call, seq(
+        field('function', $._expression),
+        field('type_arguments', $.type_argument_clause), // <T>
+        field('arguments', $.argument_list)              // ()
+      )),
+      // 匹配 f()
+      prec.left(PRECS.call, seq(
         field('function', $._expression),
         field('arguments', $.argument_list)
-      ),
+      )),
       // 索引访问
-      seq(
+      prec.left(PRECS.postfix_operations, seq(
         field('array', $._expression),
         '[',
         sep(',', $._expression),
         ']'
-      ),
+      )),
       // 成员访问
-      seq(
+      prec.left(PRECS.postfix_operations, seq(
         field('object', $._expression),
         '.',
         field('property', $.identifier)
-      )
-    )),
+      )),
+    ),
 
     argument_list: $ => seq(
       '(',
